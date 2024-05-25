@@ -1,10 +1,10 @@
-set_global_assignment -name SYSTEMVERILOG_FILE sys/video_cleaner.sv
-set_global_assignment -name SYSTEMVERILOG_FILE sys/video_mixer.sv
-set_global_assignment -name SYSTEMVERILOG_FILE sys/video_space.sv
-set_global_assignment -name SYSTEMVERILOG_FILE sys/hq2x.sv
-set_global_assignment -name VERILOG_FILE sys/scandoubler.v
-set_global_assignment -name VERILOG_FILE sys/mist_io.v
-set_global_assignment -name VERILOG_FILE sys/osd.v
-set_global_assignment -name VERILOG_FILE sys/sigma_delta_dac.v
-set_global_assignment -name SDC_FILE sys/constraints.sdc
-set_global_assignment -name QIP_FILE sys/pll.qip
+set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) video_cleaner.sv ]
+set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) video_mixer.sv ]
+set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) video_space.sv ]
+set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) hq2x.sv ]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) scandoubler.v ]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) mist_io.v ]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) osd.v ]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) sigma_delta_dac.v ]
+set_global_assignment -name SDC_FILE [file join $::quartus(qip_path) constraints.sdc ]
+

@@ -69,6 +69,8 @@ localparam CONF_STR =
 	"O8A,CPU Speed,Normal,6MHz,9.6MHz,12MHz,24MHz;",
 	"OBC,ZX Mode Speed,Emulated,Full,Real;",
 	"O5,External RAM,on,off;",
+	"T0,Reset;",
+	//"TD,Cold Reset;",
 	"V,v1.56.",`BUILD_DATE
 };
 
@@ -250,7 +252,7 @@ wire        nWR;
 wire        nRFSH;
 reg         nINT;
 wire        reset  = buttons[1] | status[0] | cold_reset | warm_reset;
-wire        cold_reset = (mod[1] & Fn[11]) | init_reset;
+wire        cold_reset = status[13] | (mod[1] & Fn[11]) | init_reset;
 wire        warm_reset =  mod[2] & Fn[11];
 wire        port_we    = ~nIORQ & ~nWR & nM1;
 wire        port_rd    = ~nIORQ & ~nRD & nM1;
@@ -291,6 +293,7 @@ reg init_reset = 1;
 always @(posedge clk_sys) begin
 	reg old_download;
 	old_download <= ioctl_download;
+	if(ioctl_download & !old_download & !ioctl_index) init_reset <= 1;
 	if(~ioctl_download & old_download & !ioctl_index) init_reset <= 0;
 end
 
@@ -606,6 +609,8 @@ wire  [7:0] fdd1_dout;
 wire  [7:0] fdd1_buf_dout;
 wire [31:0] fdd1_lba;
 
+reg         fdd1_mounted;
+
 always @(posedge clk_sys) begin
 	reg old_wr;
 	reg old_mounted;
@@ -613,9 +618,12 @@ always @(posedge clk_sys) begin
 	old_wr <= nWR;
 	if(old_wr & ~nWR & fdd1_io) fdd1_side <= addr[2];
 
-	old_mounted <= img_mounted[0];
+	fdd1_mounted <= img_mounted[0] && |img_size;
+
+	old_mounted <= fdd1_mounted;
 	if(cold_reset) fdd1_ready <= 0;
-		else if(~old_mounted & img_mounted[0]) fdd1_ready <= 1;
+		else if(~old_mounted & fdd1_mounted) fdd1_ready <= 1;
+		
 end
 
 wd1793 #(1) fdd1
@@ -630,7 +638,7 @@ wd1793 #(1) fdd1
 	.din(cpu_dout),
 	.dout(fdd1_dout),
 
-	.img_mounted(img_mounted[0]),
+	.img_mounted(fdd1_mounted),
 	.img_size(img_size[19:0]),
 	.sd_lba(fdd1_lba),
 	.sd_rd(sd_rd[0]),
@@ -684,6 +692,7 @@ wire        fdd2_io   = fdd_sel & addr[4] & ~nIORQ & nM1;
 wire  [7:0] fdd2_dout;
 wire  [7:0] fdd2_buf_dout;
 wire [31:0] fdd2_lba;
+reg         fdd2_mounted;
 
 always @(posedge clk_sys) begin
 	reg old_wr;
@@ -692,9 +701,11 @@ always @(posedge clk_sys) begin
 	old_wr <= nWR;
 	if(old_wr & ~nWR & fdd2_io) fdd2_side <= addr[2];
 
-	old_mounted <= img_mounted[1];
+	fdd2_mounted <= img_mounted[1] && |img_size;
+
+	old_mounted <= fdd2_mounted;
 	if(cold_reset) fdd2_ready <= 0;
-		else if(~old_mounted & img_mounted[1]) fdd2_ready <= 1;
+		else if(~old_mounted & fdd2_mounted) fdd2_ready <= 1;
 end
 
 wd1793 #(1) fdd2
@@ -709,7 +720,7 @@ wd1793 #(1) fdd2
 	.din(cpu_dout),
 	.dout(fdd2_dout),
 
-	.img_mounted(img_mounted[1]),
+	.img_mounted(fdd2_mounted),
 	.img_size(img_size[19:0]),
 	.sd_lba(fdd2_lba),
 	.sd_rd(sd_rd[1]),

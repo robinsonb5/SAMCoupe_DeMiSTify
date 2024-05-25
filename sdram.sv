@@ -110,9 +110,13 @@ typedef enum
 } state_t;
 
 reg  [2:0] cli;
+reg  [15:0] sd_dq;
+
+reg [12:0] nextaddr;
+reg [3:0] initcmd = CMD_NOP;
 
 always @(posedge clk) begin
-	reg [CAS_LATENCY:0] data_ready_delay;
+	reg [CAS_LATENCY+1:0] data_ready_delay;
 
 	reg        old_we, old_rd, old_we2, old_rd2;
 	reg [24:0] old_addr1, old_addr2, old_addr3;
@@ -128,7 +132,7 @@ always @(posedge clk) begin
 	command <= CMD_NOP;
 	refresh_count  <= refresh_count+1'b1;
 
-	data_ready_delay <= {1'b0, data_ready_delay[CAS_LATENCY:1]};
+	data_ready_delay <= {1'b0, data_ready_delay[CAS_LATENCY+1:1]};
 
 	if(data_ready_delay[1]) begin
 		case(cli)
@@ -137,13 +141,15 @@ always @(posedge clk) begin
 			default:;
 		endcase
 	end
+	
+	sd_dq <= SDRAM_DQ;
 
 	if(data_ready_delay[0]) begin
 		case(cli)
-			0: begin dout <= save_addr[0] ?  SDRAM_DQ[15:8] : SDRAM_DQ[7:0]; cache_data <= SDRAM_DQ; end
-			1: vid_data1  <= save_addr[0] ? {SDRAM_DQ[7:0], SDRAM_DQ[15:8]} : {SDRAM_DQ[15:8], SDRAM_DQ[7:0]};
-			2: vid_data2  <= save_addr[0] ? {SDRAM_DQ[7:0], SDRAM_DQ[15:8]} : {SDRAM_DQ[15:8], SDRAM_DQ[7:0]};
-			3: misc_dout  <= save_addr[0] ?  SDRAM_DQ[15:8] : SDRAM_DQ[7:0];
+			0: begin dout <= save_addr[0] ?  sd_dq[15:8] : sd_dq[7:0]; cache_data <= sd_dq; end
+			1: vid_data1  <= save_addr[0] ? {sd_dq[7:0], SDRAM_DQ[15:8]} : {sd_dq[15:8], sd_dq[7:0]};
+			2: vid_data2  <= save_addr[0] ? {sd_dq[7:0], SDRAM_DQ[15:8]} : {sd_dq[15:8], sd_dq[7:0]};
+			3: misc_dout  <= save_addr[0] ?  sd_dq[15:8] : SDRAM_DQ[7:0];
 			default: ;
 		endcase
 	end
@@ -159,6 +165,8 @@ always @(posedge clk) begin
 			else ram_busy <= 1;
 	end
 
+	SDRAM_A <= nextaddr;
+	
 	case(state)
 		STATE_STARTUP: begin
 			//------------------------------------------------------------------------
@@ -183,24 +191,32 @@ always @(posedge clk) begin
 			SDRAM_DQ   <= 16'bZZZZZZZZZZZZZZZZ;
 			SDRAM_DQML <= 1;
 			SDRAM_DQMH <= 1;
-			SDRAM_A    <= 0;
+//			SDRAM_A    <= 0;
 			SDRAM_BA   <= 0;
+			
+			command <= initcmd;
 
 			// All the commands during the startup are NOPS, except these
 			if(refresh_count == startup_refresh_max-31) begin
 				// ensure all rows are closed
-				command     <= CMD_PRECHARGE;
-				SDRAM_A[10] <= 1;  // all banks
+				initcmd     <= CMD_PRECHARGE;
+				nextaddr <= 0;
+				nextaddr[10] <= 1;
+//				SDRAM_A[10] <= 1;  // all banks
 				SDRAM_BA    <= 2'b00;
 			end else if (refresh_count == startup_refresh_max-23) begin
 				// these refreshes need to be at least tREF (66ns) apart
-				command     <= CMD_AUTO_REFRESH;
+				initcmd    <= CMD_AUTO_REFRESH;
+//				command     <= CMD_AUTO_REFRESH;
 			end else if (refresh_count == startup_refresh_max-15) 
-				command     <= CMD_AUTO_REFRESH;
+				initcmd     <= CMD_AUTO_REFRESH;
+//				command     <= CMD_AUTO_REFRESH;
 			else if (refresh_count == startup_refresh_max-7) begin
 				// Now load the mode register
-				command     <= CMD_LOAD_MODE;
-				SDRAM_A     <= MODE;
+				nextaddr   <= MODE;
+				initcmd    <= CMD_LOAD_MODE;
+//				command     <= CMD_LOAD_MODE;
+//				SDRAM_A     <= MODE;
 			end
 
 			//------------------------------------------------------
@@ -276,9 +292,12 @@ always @(posedge clk) begin
 		end
 
 		// ACTIVE-to-READ or WRITE delay >20ns (-75)
-		STATE_OPEN_1: state <= STATE_OPEN_2;
+		STATE_OPEN_1: begin
+			state <= STATE_OPEN_2;
+			nextaddr    <= {4'b0010, save_addr[22:14]}; 
+		end
 		STATE_OPEN_2: begin
-			SDRAM_A     <= {4'b0010, save_addr[22:14]}; 
+//			SDRAM_A     <= {4'b0010, save_addr[22:14]}; 
 			SDRAM_DQML  <= save_we &  save_addr[0];
 			SDRAM_DQMH  <= save_we & ~save_addr[0];
 			state       <= save_we ? STATE_WRITE : STATE_READ;
@@ -290,7 +309,7 @@ always @(posedge clk) begin
 			SDRAM_DQ    <= 16'bZZZZZZZZZZZZZZZZ;
 
 			// Schedule reading the data values off the bus
-			data_ready_delay[CAS_LATENCY] <= 1;
+			data_ready_delay[CAS_LATENCY+1] <= 1;
 		end
 
 		STATE_WRITE: begin
